@@ -1,0 +1,15 @@
+/*
+This file is part of REANA.
+Copyright (C) 2026 CERN.
+
+REANA is free software; you can redistribute it and/or modify it
+under the terms of the MIT License; see LICENSE file for more details.
+*/
+
+package main
+
+import "testing"
+
+func TestMainPackage(t *testing.T) {
+	// Keep the command package covered until sidecar logic lands.
+}

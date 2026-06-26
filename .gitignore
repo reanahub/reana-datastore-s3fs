@@ -1,0 +1,27 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/reana-datastore-s3fs
+dist/
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the Go coverage tool
+*.out
+coverage.xml
+coverage.txt
+
+# Dependency directories
+vendor/
+
+# Go workspace file
+go.work
+
+# Editor and project files
+.vscode/
+.idea/
+*.iml

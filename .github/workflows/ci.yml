@@ -1,0 +1,225 @@
+# This file is part of REANA.
+# Copyright (C) 2026 CERN.
+#
+# REANA is free software; you can redistribute it and/or modify it
+# under the terms of the MIT License; see LICENSE file for more details.
+
+name: ci
+
+on: [push, pull_request]
+
+jobs:
+  docker-build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build image
+        run: ./run-tests.sh --docker-build
+
+      - name: Test image
+        run: ./run-tests.sh --docker-test
+
+  format-go:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.4"
+
+      - name: Check Go code formatting
+        run: ./run-tests.sh --format-go
+
+  format-prettier:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+
+      - name: Check Prettier code formatting
+        run: |
+          npm install prettier --global
+          ./run-tests.sh --format-prettier
+
+  format-shfmt:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check shell script code formatting
+        run: |
+          sudo apt-get install shfmt
+          ./run-tests.sh --format-shfmt
+
+  go-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.4"
+
+      - name: Build Go executable
+        run: ./run-tests.sh --go-build
+
+      - name: Build Linux executables
+        run: ./run-tests.sh --go-build-all
+
+      - name: Run Go test suite
+        run: ./run-tests.sh --go-tests
+
+      - name: Codecov Coverage
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.txt
+
+  lint-commitlint:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+
+      - name: Install commitlint
+        run: |
+          npm install conventional-changelog-conventionalcommits
+          npm install commitlint@latest
+
+      - name: Check commit message compliance of the recently pushed commit
+        if: github.event_name == 'push'
+        run: |
+          ./run-tests.sh --lint-commitlint HEAD~1 HEAD
+
+      - name: Check commit message compliance of the pull request
+        if: github.event_name == 'pull_request'
+        run: |
+          ./run-tests.sh --lint-commitlint ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} ${{ github.event.pull_request.number }}
+
+  lint-goaudit:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.4"
+
+      - name: Run Go audit checks
+        run: ./run-tests.sh --lint-goaudit
+
+  lint-hadolint:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check Dockerfile compliance
+        run: ./run-tests.sh --lint-hadolint
+
+  lint-jsonlint:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+
+      - name: Lint JSON files
+        run: |
+          npm install jsonlint --global
+          ./run-tests.sh --lint-jsonlint
+
+  lint-markdownlint:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+
+      - name: Lint Markdown files
+        run: |
+          npm install markdownlint-cli2 --global
+          ./run-tests.sh --lint-markdownlint
+
+  lint-shellcheck:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Runs shell script static analysis
+        run: |
+          sudo apt-get install shellcheck
+          ./run-tests.sh --lint-shellcheck
+
+  lint-yamllint:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Lint YAML files
+        run: |
+          pip install yamllint
+          ./run-tests.sh --lint-yamllint
+
+  release-docker:
+    runs-on: ubuntu-24.04
+    if: >
+      vars.RELEASE_DOCKER == 'true' && github.event_name == 'push' &&
+      startsWith(github.ref, 'refs/tags/')
+    needs:
+      - docker-build
+      - format-go
+      - format-prettier
+      - format-shfmt
+      - go-tests
+      - lint-commitlint
+      - lint-goaudit
+      - lint-hadolint
+      - lint-jsonlint
+      - lint-markdownlint
+      - lint-shellcheck
+      - lint-yamllint
+    steps:
+      - name: Release Docker image
+        uses: reanahub/reana-github-actions/release-docker@v1
+        with:
+          username: ${{ secrets.DOCKER_USER }}
+          token: ${{ secrets.DOCKER_TOKEN }}
+          organisation: ${{ vars.DOCKER_ORGANISATION }}
+          registry: ${{ vars.DOCKER_REGISTRY }}
+          build-args: |
+            VERSION=${{ github.ref_name }}
+          platform: |
+            linux/amd64
+            linux/arm64
